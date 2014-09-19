@@ -1,6 +1,0 @@
----
-title: "Practical Machine Learning Project(Coursera)"
-author: "Jawad Rashid"
-output: html_document
----
-
