@@ -1,0 +1,14 @@
+base
+caret
+e1071
+gbm
+ggplot2
+kernlab
+lattice
+plyr
+randomForest
+rattle
+RColorBrewer
+rpart
+rpart.plot
+survival

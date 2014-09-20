@@ -4,3 +4,173 @@ author: "Jawad Rashid"
 output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+```
+
+```{r LoadLibraries, echo=FALSE, results='hide', message=FALSE}
+library(caret)
+library(kernlab)
+library(rattle)
+library(rpart)
+library(gbm)
+library(randomForest)
+```
+
+```{r loadModels, echo=FALSE, results='hide', message=FALSE}
+load("rPartModel.rda")
+load("rfModel.rda")
+load("gbmModel.rda")
+```
+
+### About the Dataset
+
+This data-set was collected from 6 participants from accelerometers from belt, forearm arm and dumbell and each participant performed barbell correctly and incorrectly in 5 different ways. 
+
+
+### Citation 
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. [Qualitative Activity Recognition of Weight Lifting Exercises](http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201). Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013. [http://groupware.les.inf.puc-rio.br/har](Dataset Link)
+
+
+### Prediction Task
+
+Based on the features extracted from accelerometer predict the type in which the exercise was done which is the **classe** variable. These are the steps which were used:
+
+1. Read in the data-set from testing and training(test case) files. More on this later.
+2. Preprocess the data-sets to remove unnecessary columns not needed in analysis.
+3. Create training, and testing data-set from the training file. 
+4. Make prediction for the 20 test cases using a very simple majority voting algorithms. This is the base model to compare to.
+5. Evaluate the best algorithm to use by incrementally trying out rPart(Recursive Partitioning and Regression Trees), Random Forest and generalized boosted regression models and compare the out error for all algorithms. 
+6. Choose the best algorithm from step 5 and use it make prediction for the 20 test cases.
+
+
+### Reading in dataset & Preprocessing
+
+The code was read in using the provided two training and testing files.
+```{r ReadInDataset, results='hide'}
+allData <- read.csv("pml-training.csv")
+cases <- read.csv("pml-testing.csv")
+```
+The **allData** was the original training file which had originally `r  nrow(allData)` records and `r  ncol(allData)` columns including **classe** class variable. The **cases** variable which read in the testing file contained the `r nrow(cases)` test cases for which we needed to predict the output value. 
+
+**Classe** response variable had **`r length(levels(allData$classe))`** distinct values and the distribution of the values are as following in percentage of the total values in Table **1**:
+```{r table1}
+table(allData$classe)/nrow(allData) * 100
+```
+
+Not all variables were important as the first 5 columns were just subject details and time-stamp information so that was removed. Also, there were 60 variables which were **NA** in the test cases and mostly missing also in the training data-set so those variables were removed. Code is given below.
+```{r PreProcessData}
+allNAs <- which(sapply(cases, function(x) all(is.na(x))))
+removeCols <- union(allNAs, c(1:5))
+#The last column was removed form cases as that was only the problem number. 
+cases <- cases[, -union(removeCols,ncol(cases))]
+filteredData <- allData[, -removeCols]
+```
+This reduced the data-set from **`r ncol(allData)`** columns to **`r ncol(filteredData)`** columns. 
+
+Lastly, the training data-set was split into training and testing data with split percentage of 75%. The training data-set was later split into 10-fold Cross-validation through **train** function.
+```{r DataSplit, results='hide'}
+set.seed(1)
+inTrain <- createDataPartition(y = filteredData$classe, p=0.75, list=FALSE)
+training <- filteredData[inTrain, ]
+testing <- filteredData[-inTrain, ]
+```
+
+### Base Model
+
+The base model as already discussed was the most simplified model which was to always predict the majority class. As you can see from the table 1 that the majority class in the data-set was **A**. Following is the code for the model. 
+
+```{r BaseModel, results='hide'}
+set.seed(2)
+baseOutput <- factor(rep("A", nrow(testing)), levels=c("A","B","C","D","E"))
+baseTraining <- factor(rep("A", nrow(training)), levels=c("A","B","C","D","E"))
+baseTrainConfusion <- confusionMatrix(training$classe, baseTraining)
+baseConfusion <- confusionMatrix(testing$classe, baseOutput)
+```
+The in sample error accuracy was **`r round(baseTrainConfusion$overall[1]*100, 2)`%** and the out of sample error was **`r round(baseConfusion$overall[1]*100, 2)`%**
+
+### Recursive Partitioning and Regression Trees Model
+
+Next, rPart with 10-fold cross validation was used. The model was trained using **train** function with all default values. The model took only **45** seconds to train.
+
+```{r rPartModel, results='hide', eval=FALSE, message=FALSE}
+set.seed(4)
+rPartModel <- train(classe ~ ., data=training, method="rpart", trControl=trainControl(method="cv"))
+```
+
+Here is the tree output from rPart
+```{r rPartFinalModelGraph, message=FALSE}
+fancyRpartPlot(rPartModel$finalModel)
+```
+
+As you can see that other than the first leaf which is pure all the other leaves are not pure and there is not even a leaf with the label **D** which makes you think that the predictions will be better than base model but not good enough. As we can see from below when we make predictions for training and test data and display the confusion matrix
+```{r rPartPredictions}
+rPartTrainPred <- predict(rPartModel, newdata=training)
+rPartTestPred <- predict(rPartModel, newdata=testing)
+trainingConfusion <- confusionMatrix(training$classe, rPartTrainPred)
+testingConfusion <- confusionMatrix(testing$classe, rPartTestPred)
+print(testingConfusion$table)
+```
+
+As you can see from the table rPart predicted 50% of values in activity A, B and C correctly and it was 0% accurate for activity D. The in-sample error accuracy was **`r round(trainingConfusion$overall[1]*100, 2)`%** and out of sample error was **`r round(testingConfusion$overall[1]*100, 2)`%** which is an significant improvement over base model but still not good enough.
+
+### Random Forest Model
+
+I tried tweaking rPart but was not able to improve results. So i moved on to  random forest model which was more slower algorithm than rPart but more powerful. Again 10-fold cross validation was used with default options.
+
+```{r RandomForestModel, eval=FALSE, message=FALSE}
+set.seed(40)
+rfModel <- train(classe ~ ., data=training, method="rf", trControl=trainControl(method="cv"))
+```
+
+As you can see from the plot below random forest used accuracy to select the optimal solution of **28** trees.
+```{r RandomForestError}
+plot(rfSimpleModel$finalModel, main="")
+```
+
+Now let us look at the confusion matrix for random forest below. 
+```{r rfPredictions, message=FALSE}
+rfTrainPred <- predict(rfModel, newdata=training)
+rfTestPred <- predict(rfModel, newdata=testing)
+rfTrainingConfusion <- confusionMatrix(training$classe, rfTrainPred)
+rfTestingConfusion <- confusionMatrix(testing$classe, rfTestPred)
+print(rfTestingConfusion$table)
+```
+There was only one error in the testing data so the in-sample error was **`r round(rfTrainingConfusion$overall[1]*100, 2)`%** and out-sample error was **`r round(rfTestingConfusion$overall[1]*100, 2)`%** which huge improvement. The algorithm performed near perfect on the testing data. If the out-error and in-error difference was huge we could have said that the algorithm was over fitting but as the difference is marginal this means algorithm is not over fitting and also we used k-fold cross validation to reduce over fitting. The only problem is that the algorithm took around **45** minutes against **45** seconds for rPart which is taking too long. Maybe we can improve on the time someway.
+
+### Generalized Boosted Regression Modeling
+
+The results from random forest were great but in an attempt to reduce the time needed to train the model while maintaining a good accuracy i choose to use boosting which uses similar concepts than random forest but uses weak predictors and weigh them based on their accuracy to get similar results with simple trees rather than making complex trees.
+
+Using 10-fold cross validation was used with default options.
+
+```{r GBMModel, eval=FALSE, message=FALSE}
+set.seed(50)
+gbmModel <- train(classe ~ ., data=training, method="rf", trControl=trainControl(method="cv"))
+```
+
+Through 10-fold cross validation the algorithm used accuracy to find optimal values of **150** trees, with interaction depth of **3** and shrinkage of **0.1**. Let us see the plot for accuracy vs tree depth. 
+
+```{r gbmGraph, message=FALSE}
+plot(gbmModel)
+```
+
+Let us see the confusion matrix.
+```{r gbmPredictions, message=FALSE}
+gbmTrainPred <- predict(gbmModel, newdata=training)
+gbmTestPred <- predict(gbmModel, newdata=testing)
+gbmTrainingConfusion <- confusionMatrix(training$classe, gbmTrainPred)
+gbmTestingConfusion <- confusionMatrix(testing$classe, gbmTestPred)
+print(gbmTestingConfusion$table)
+```
+
+
+Results were in-sample error was **`r round(gbmTrainingConfusion$overall[1]*100, 2)`%** and out-sample error was **`r round(gbmTestingConfusion$overall[1]*100, 2)`%**. There were more errors and the performance deteriorated a little as compared to random forest as you can see from the confusion matrix above but the important point was it took now **15** minutes compared to **45** minutes for random forest which was 3 times better int terms of time but marginally worse in term of accuracy. 
+
+### Results
+
+The final result rPart was not able to give any good accuracy. Random forest was great in accuracy but was slow to train. Finally gbm(generalize boosting regression model) was a little less accurate but faster. So in this case gbm would scale well with more data as compare to random forest but if you have accuracy in mind but can wait longer then use random forest. Also, one final note about cross validation i used 10-fold cross validationbut there can be improvements made by using repeated cross-validation but due to shortage of time i have not used k-fold cross validation vs k-fold repeated cross validation but the results are still great for k-fold cross-validaiton. So i predicted the final answer for the test cases using the gbm model which gave 100% accuracy on the prediction part of the project. 
+
+```{r casesPrediction, eval=FALSE}
+predict(gbmModel, newdata=cases)
+```
