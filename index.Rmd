@@ -91,7 +91,7 @@ The in sample error accuracy was **`r round(baseTrainConfusion$overall[1]*100, 2
 
 ### Recursive Partitioning and Regression Trees Model
 
-Next, rPart with 10-fold cross validation was used. The model was trained using **train** function with all default values. The model took only **seconds** to train.
+Next, rPart with 10-fold cross validation was used. The model was trained using **train** function with all default values. The model took only **45** seconds to train.
 
 ```{r rPartModel, results='hide', eval=FALSE, message=FALSE}
 set.seed(4)
@@ -100,7 +100,7 @@ rPartModel <- train(classe ~ ., data=training, method="rpart", trControl=trainCo
 
 Here is the tree output from rPart
 ```{r rPartFinalModelGraph, message=FALSE}
-fancyRpartPlot(rPartModel$finalModel, main="rPart Tree")
+fancyRpartPlot(rPartModel$finalModel)
 ```
 
 As you can see that other than the first leaf which is pure all the other leaves are not pure and there is not even a leaf with the label **D** which makes you think that the predictions will be better than base model but not good enough. As we can see from below when we make predictions for training and test data and display the confusion matrix
@@ -125,7 +125,7 @@ rfModel <- train(classe ~ ., data=training, method="rf", trControl=trainControl(
 
 As you can see from the plot below random forest used accuracy to select the optimal solution of **28** trees.
 ```{r RandomForestError}
-plot(rfSimpleModel$finalModel)
+plot(rfSimpleModel$finalModel, main="")
 ```
 
 Now let us look at the confusion matrix for random forest below. 
@@ -169,7 +169,7 @@ Results were in-sample error was **`r round(gbmTrainingConfusion$overall[1]*100,
 
 ### Results
 
-The final result rPart was not able to give any good accuracy. Random forest was great in accuracy but was slow to train. Finally gbm(generalize boosting regression model) was a little less accurate but faster. So in this case gbm would scale well with more data as compare to random forest but if you have accuracy in mind but can wait longer then use random forest. So i predicted the final answer for the test cases using the gbm model which gave 100% accuracy on the prediction part of the project. 
+The final result rPart was not able to give any good accuracy. Random forest was great in accuracy but was slow to train. Finally gbm(generalize boosting regression model) was a little less accurate but faster. So in this case gbm would scale well with more data as compare to random forest but if you have accuracy in mind but can wait longer then use random forest. Also, one final note about cross validation i used 10-fold cross validationbut there can be improvements made by using repeated cross-validation but due to shortage of time i have not used k-fold cross validation vs k-fold repeated cross validation but the results are still great for k-fold cross-validaiton. So i predicted the final answer for the test cases using the gbm model which gave 100% accuracy on the prediction part of the project. 
 
 ```{r casesPrediction, eval=FALSE}
 predict(gbmModel, newdata=cases)
