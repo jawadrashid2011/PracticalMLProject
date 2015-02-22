@@ -1,5 +1,5 @@
 PracticalMLProject
 ==================
 
-Project For Practical Machine Learning Coursera
+Project For Practical Machine Learning
 By Jawad Rashid
